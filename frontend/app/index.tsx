@@ -432,19 +432,7 @@ const LoginScreen = () => {
           </Text>
         </View>
 
-        {/* Registration Modal */}
-        <Modal
-          visible={showRegister}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowRegister(false)}
-        >
-          <RegisterModal
-            onClose={() => setShowRegister(false)}
-            colors={colors}
-            dynamicStyles={dynamicStyles}
-          />
-        </Modal>
+
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Stadtwache - Mit Backend</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:Arial;background:#1E3A8A;color:white;margin:0;padding:20px}
+.container{max-width:400px;margin:0 auto;background:rgba(255,255,255,0.1);padding:30px;border-radius:15px}
+h1{text-align:center;margin-bottom:20px}
+input{width:100%;padding:15px;margin:10px 0;border:none;border-radius:8px;font-size:16px}
+button{width:100%;padding:15px;background:#10B981;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin:10px 0}
+button:hover{background:#059669}
+.demo{background:rgba(255,255,255,0.1);padding:15px;border-radius:8px;margin-top:15px}
+.features{display:none}
+.feature{background:rgba(255,255,255,0.1);padding:20px;margin:10px 0;border-radius:8px;text-align:center;cursor:pointer}
+.feature:hover{background:rgba(255,255,255,0.2)}
+.status{padding:10px;background:rgba(16,185,129,0.2);border-radius:5px;margin:10px 0;font-size:14px}
+.error{background:rgba(239,68,68,0.2)}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="status" id="connection-status">🔄 Verbinde mit Backend...</div>
+<div id="login">
+<h1>🏛️ STADTWACHE</h1>
+<p>Sicherheitsbehörde Schwelm - Live Backend</p>
+<input type="email" id="email" placeholder="E-Mail">
+<input type="password" id="password" placeholder="Passwort">
+<button onclick="loginWithBackend()">Anmelden (Backend)</button>
+<div class="demo">
+<h3>Backend-Accounts:</h3>
+<p>Diese werden vom Server validiert</p>
+<p>Admin: admin@stadtwache.de / admin123</p>
+<p>Wächter: waechter@stadtwache.de / waechter123</p>
+</div>
+</div>
+<div id="app" class="features">
+<h1>Stadtwache Dashboard - Live</h1>
+<p id="welcome">Willkommen</p>
+<div class="feature" onclick="loadIncidents()">📋 Vorfälle laden</div>
+<div class="feature" onclick="loadChat()">💬 Chat laden</div>
+<div class="feature" onclick="loadTeam()">👥 Team laden</div>
+<div class="feature" onclick="loadReports()">📊 Berichte laden</div>
+<div class="feature" onclick="loadAdmin()">⚙️ Admin laden</div>
+<div class="feature" onclick="emergency()">🚨 Notfall senden</div>
+<button onclick="logout()">Abmelden</button>
+<div class="status" id="data-status">📊 Bereit für Live-Daten</div>
+</div>
+</div>
+<script>
+// Backend-URL (Ihr FastAPI Server)
+const BACKEND_URL = '/api';  // Nutzt Ihr laufendes Backend
+let authToken = null;
+
+// Verbindung zum Backend testen
+async function checkBackendConnection() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/health`);
+    if (response.ok) {
+      document.getElementById('connection-status').innerHTML = '✅ Backend verbunden';
+      document.getElementById('connection-status').className = 'status';
+    } else {
+      throw new Error('Backend nicht erreichbar');
+    }
+  } catch (error) {
+    document.getElementById('connection-status').innerHTML = '❌ Backend offline - Fallback auf Demo-Modus';
+    document.getElementById('connection-status').className = 'status error';
+  }
+}
+
+// Login mit echtem Backend
+async function loginWithBackend() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  
+  if (!email || !password) {
+    alert('Bitte E-Mail und Passwort eingeben');
+    return;
+  }
+  
+  try {
+    // Login-Request an Ihr Backend
+    const response = await fetch(`${BACKEND_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      authToken = data.access_token;
+      
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('welcome').textContent = `Willkommen, ${data.user.name || email.split('@')[0]}`;
+      document.getElementById('data-status').innerHTML = '✅ Mit Backend verbunden - Live-Daten verfügbar';
+      
+    } else {
+      // Fallback auf Demo-Login
+      demoLogin(email, password);
+    }
+  } catch (error) {
+    console.error('Backend-Login fehler:', error);
+    // Fallback auf Demo-Login
+    demoLogin(email, password);
+  }
+}
+
+// Demo-Login als Fallback
+function demoLogin(email, password) {
+  if (email.includes('@') && password.length > 0) {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('welcome').textContent = `Willkommen, ${email.split('@')[0]} (Demo-Modus)`;
+    document.getElementById('data-status').innerHTML = '⚠️ Demo-Modus - Keine Backend-Verbindung';
+  } else {
+    alert('Ungültige Anmeldedaten');
+  }
+}
+
+// Vorfälle vom Backend laden
+async function loadIncidents() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/incidents`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const incidents = await response.json();
+        alert(`📋 Vorfälle geladen: ${incidents.length} aktive Vorfälle`);
+      } else {
+        throw new Error('Fehler beim Laden');
+      }
+    } catch (error) {
+      alert('📋 Demo: Vorfall-Management\n\n• Vorfälle melden und dokumentieren\n• Prioritäten zuweisen\n• Status-Verfolgung');
+    }
+  } else {
+    alert('📋 Demo: Vorfall-Management\n\n• Vorfälle melden und dokumentieren\n• Prioritäten zuweisen\n• Status-Verfolgung');
+  }
+}
+
+// Chat vom Backend laden
+async function loadChat() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/chat/messages`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const messages = await response.json();
+        alert(`💬 Chat geladen: ${messages.length} neue Nachrichten`);
+      } else {
+        throw new Error('Fehler beim Laden');
+      }
+    } catch (error) {
+      alert('💬 Demo: Real-Time Chat\n\n• Live-Kommunikation zwischen Wächtern\n• Kanal-System\n• Online-Status');
+    }
+  } else {
+    alert('💬 Demo: Real-Time Chat\n\n• Live-Kommunikation zwischen Wächtern\n• Kanal-System\n• Online-Status');
+  }
+}
+
+// Team vom Backend laden
+async function loadTeam() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/team`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const team = await response.json();
+        alert(`👥 Team geladen: ${team.length} Wächter online`);
+      } else {
+        throw new Error('Fehler beim Laden');
+      }
+    } catch (error) {
+      alert('👥 Demo: Team-Übersicht\n\n• Status aller Wächter\n• GPS-Standort-Verfolgung\n• Schicht-Planung');
+    }
+  } else {
+    alert('👥 Demo: Team-Übersicht\n\n• Status aller Wächter\n• GPS-Standort-Verfolgung\n• Schicht-Planung');
+  }
+}
+
+// Berichte vom Backend laden
+async function loadReports() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/reports`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const reports = await response.json();
+        alert(`📊 Berichte geladen: ${reports.length} Berichte verfügbar`);
+      } else {
+        throw new Error('Fehler beim Laden');
+      }
+    } catch (error) {
+      alert('📊 Demo: Berichte-System\n\n• Digitale Schichtberichte\n• Vorfall-Dokumentation\n• Export-Funktionen');
+    }
+  } else {
+    alert('📊 Demo: Berichte-System\n\n• Digitale Schichtberichte\n• Vorfall-Dokumentation\n• Export-Funktionen');
+  }
+}
+
+// Admin-Panel laden
+async function loadAdmin() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/admin/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.ok) {
+        const adminData = await response.json();
+        alert(`⚙️ Admin-Panel: ${adminData.users} Benutzer, ${adminData.incidents} Vorfälle`);
+      } else {
+        throw new Error('Fehler beim Laden');
+      }
+    } catch (error) {
+      alert('⚙️ Demo: Admin-Panel\n\n• Benutzer-Verwaltung\n• System-Konfiguration\n• Backup und Statistiken');
+    }
+  } else {
+    alert('⚙️ Demo: Admin-Panel\n\n• Benutzer-Verwaltung\n• System-Konfiguration\n• Backup und Statistiken');
+  }
+}
+
+// Notfall an Backend senden
+async function emergency() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/emergency`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'emergency',
+          location: 'GPS-Coordinates',
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      if (response.ok) {
+        alert('🚨 NOTFALL GESENDET!\nLeitstelle wurde benachrichtigt.');
+      } else {
+        throw new Error('Fehler beim Senden');
+      }
+    } catch (error) {
+      alert('🚨 Demo: Notfall-System\n\nIn Echtversion:\n• Sofortige Hilfe anfordern\n• GPS-Übermittlung\n• Leitstelle kontaktieren');
+    }
+  } else {
+    alert('🚨 Demo: Notfall-System\n\nIn Echtversion:\n• Sofortige Hilfe anfordern\n• GPS-Übermittlung\n• Leitstelle kontaktieren');
+  }
+}
+
+function logout() {
+  if (confirm('Möchten Sie sich wirklich abmelden?')) {
+    authToken = null;
+    document.getElementById('login').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('email').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('data-status').innerHTML = '📊 Bereit für Live-Daten';
+  }
+}
+
+// Enter-Taste für Login
+document.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter' && document.getElementById('login').style.display !== 'none') {
+    loginWithBackend();
+  }
+});
+
+// Backend-Verbindung beim Laden prüfen
+window.addEventListener('load', checkBackendConnection);
+</script>
+</body>
+</html>

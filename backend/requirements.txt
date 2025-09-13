@@ -1,5 +1,7 @@
 annotated-types==0.7.0
 anyio==4.10.0
+asyncio-mqtt==0.16.2
+bcrypt==4.3.0
 bidict==0.23.1
 black==25.1.0
 boto3==1.40.30
@@ -29,6 +31,7 @@ mypy_extensions==1.1.0
 numpy==2.3.3
 oauthlib==3.3.1
 packaging==25.0
+paho-mqtt==2.1.0
 pandas==2.3.2
 passlib==1.7.4
 pathspec==0.12.1

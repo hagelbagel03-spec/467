@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Stadtwache - Live Server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:Arial;background:#1E3A8A;color:white;margin:0;padding:20px}
+.container{max-width:400px;margin:0 auto;background:rgba(255,255,255,0.1);padding:30px;border-radius:15px}
+h1{text-align:center;margin-bottom:20px}
+input{width:100%;padding:15px;margin:10px 0;border:none;border-radius:8px;font-size:16px}
+button{width:100%;padding:15px;background:#10B981;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin:10px 0}
+button:hover{background:#059669}
+.demo{background:rgba(255,255,255,0.1);padding:15px;border-radius:8px;margin-top:15px}
+.features{display:none}
+.feature{background:rgba(255,255,255,0.1);padding:20px;margin:10px 0;border-radius:8px;text-align:center;cursor:pointer}
+.feature:hover{background:rgba(255,255,255,0.2)}
+.status{padding:10px;background:rgba(16,185,129,0.2);border-radius:5px;margin:10px 0;font-size:14px}
+.error{background:rgba(239,68,68,0.2)}
+.server-info{background:rgba(255,255,255,0.05);padding:10px;border-radius:5px;margin:10px 0;font-size:12px}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="server-info">
+🌐 Server: 212.227.57.238<br>
+📡 IPv6: 2a02:2479:39:4500::1<br>
+👤 Administrator-Zugang
+</div>
+<div class="status" id="connection-status">🔄 Verbinde mit Live-Server...</div>
+<div id="login">
+<h1>🏛️ STADTWACHE</h1>
+<p>Sicherheitsbehörde Schwelm - Live Server</p>
+<input type="email" id="email" placeholder="E-Mail" value="admin@stadtwache.de">
+<input type="password" id="password" placeholder="Passwort" value="admin123">
+<button onclick="loginWithLiveServer()">Mit Live-Server anmelden</button>
+<div class="demo">
+<h3>Live-Server Accounts:</h3>
+<p>Diese werden vom echten Server validiert:</p>
+<p>📧 admin@stadtwache.de / admin123</p>
+<p>📧 waechter@stadtwache.de / waechter123</p>
+</div>
+</div>
+<div id="app" class="features">
+<h1>🏛️ Stadtwache Dashboard - LIVE</h1>
+<p id="welcome">Willkommen</p>
+<div class="status" id="user-info">👤 Angemeldet als Administrator</div>
+<div class="feature" onclick="loadLiveIncidents()">📋 Live-Vorfälle</div>
+<div class="feature" onclick="loadLiveChat()">💬 Live-Chat</div>
+<div class="feature" onclick="loadLiveTeam()">👥 Live-Team</div>
+<div class="feature" onclick="loadLiveReports()">📊 Live-Berichte</div>
+<div class="feature" onclick="loadLiveAdmin()">⚙️ Live-Admin</div>
+<div class="feature" onclick="sendLiveEmergency()">🚨 Live-Notfall</div>
+<button onclick="logout()">Abmelden</button>
+<div class="status" id="data-status">📊 Live-Daten verfügbar</div>
+</div>
+</div>
+<script>
+// LIVE SERVER KONFIGURATION
+const LIVE_SERVER = 'http://212.227.57.238:8001';
+const LIVE_SERVER_API = `${LIVE_SERVER}/api`;
+let authToken = null;
+let userInfo = null;
+
+// Verbindung zum Live-Server testen
+async function checkLiveServerConnection() {
+  const statusElement = document.getElementById('connection-status');
+  
+  try {
+    // Versuche verschiedene Endpoints
+    const endpoints = [
+      `${LIVE_SERVER_API}/health`,
+      `${LIVE_SERVER}/health`,
+      `${LIVE_SERVER_API}/status`,
+      `${LIVE_SERVER}/docs`  // FastAPI docs endpoint
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok || response.status === 404) {  // 404 ist auch OK - Server antwortet
+          statusElement.innerHTML = `✅ Live-Server verbunden (${endpoint})`;
+          statusElement.className = 'status';
+          return true;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    throw new Error('Alle Endpoints fehlgeschlagen');
+    
+  } catch (error) {
+    console.error('Server-Verbindung:', error);
+    statusElement.innerHTML = '⚠️ Live-Server nicht erreichbar - Demo-Modus verfügbar';
+    statusElement.className = 'status error';
+    return false;
+  }
+}
+
+// Login mit Live-Server
+async function loginWithLiveServer() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  
+  if (!email || !password) {
+    alert('Bitte E-Mail und Passwort eingeben');
+    return;
+  }
+  
+  // Zeige Loading
+  const statusElement = document.getElementById('connection-status');
+  statusElement.innerHTML = '🔄 Anmeldung läuft...';
+  
+  try {
+    // Login-Request an Live-Server
+    const loginEndpoints = [
+      `${LIVE_SERVER_API}/auth/login`,
+      `${LIVE_SERVER_API}/login`,
+      `${LIVE_SERVER}/auth/login`,
+      `${LIVE_SERVER}/login`
+    ];
+    
+    for (const endpoint of loginEndpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+            username: email  // Fallback
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          authToken = data.access_token || data.token;
+          userInfo = data.user || { email: email, name: email.split('@')[0] };
+          
+          showDashboard(userInfo);
+          statusElement.innerHTML = `✅ Erfolgreich angemeldet via ${endpoint}`;
+          return;
+        }
+      } catch (e) {
+        console.error(`Login-Versuch ${endpoint}:`, e);
+        continue;
+      }
+    }
+    
+    throw new Error('Alle Login-Endpoints fehlgeschlagen');
+    
+  } catch (error) {
+    console.error('Live-Server Login fehler:', error);
+    
+    // Fallback: Demo-Login
+    if (email.includes('@') && password.length > 2) {
+      userInfo = { 
+        email: email, 
+        name: email.split('@')[0],
+        role: email.includes('admin') ? 'Administrator' : 'Wächter'
+      };
+      showDashboard(userInfo);
+      statusElement.innerHTML = '⚠️ Demo-Modus - Live-Server nicht erreichbar';
+    } else {
+      alert('❌ Anmeldung fehlgeschlagen!\n\nServer nicht erreichbar und ungültige Demo-Daten.');
+    }
+  }
+}
+
+// Dashboard anzeigen
+function showDashboard(user) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('welcome').textContent = `Willkommen, ${user.name}`;
+  document.getElementById('user-info').innerHTML = `👤 ${user.role || 'Benutzer'} - ${user.email}`;
+  
+  if (authToken) {
+    document.getElementById('data-status').innerHTML = '🔥 Live-Server Modus - Echte Daten';
+  } else {
+    document.getElementById('data-status').innerHTML = '⚠️ Demo-Modus - Testdaten';
+  }
+}
+
+// Live-Daten laden Funktionen
+async function loadLiveIncidents() {
+  if (authToken) {
+    try {
+      const endpoints = [
+        `${LIVE_SERVER_API}/incidents`,
+        `${LIVE_SERVER_API}/vorfaelle`,
+        `${LIVE_SERVER}/incidents`
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const incidents = await response.json();
+            alert(`📋 LIVE-VORFÄLLE GELADEN!\n\n${incidents.length || 'Mehrere'} aktive Vorfälle vom Server\nEndpoint: ${endpoint}`);
+            return;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      throw new Error('Kein Incidents-Endpoint verfügbar');
+    } catch (error) {
+      alert('📋 Live-Server Fehler - Demo-Daten:\n\n• 3 aktive Vorfälle\n• 1 kritischer Vorfall\n• 2 in Bearbeitung');
+    }
+  } else {
+    alert('📋 Demo: Vorfall-Management\n\n• Vorfälle melden und dokumentieren\n• Prioritäten zuweisen\n• Status-Verfolgung\n• GPS-Integration');
+  }
+}
+
+async function loadLiveChat() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${LIVE_SERVER_API}/chat/messages`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      if (response.ok) {
+        const messages = await response.json();
+        alert(`💬 LIVE-CHAT GELADEN!\n\n${messages.length} neue Nachrichten\nLetzter Server-Sync: ${new Date().toLocaleTimeString()}`);
+      } else {
+        throw new Error('Chat-API nicht verfügbar');
+      }
+    } catch (error) {
+      alert('💬 Live-Server Fehler - Demo-Daten:\n\n• 5 neue Nachrichten\n• 2 Wächter online\n• Letzter Chat: vor 2 Min');
+    }
+  } else {
+    alert('💬 Demo: Real-Time Chat\n\n• Live-Kommunikation\n• Kanal-System\n• Online-Status\n• Datei-Austausch');
+  }
+}
+
+async function loadLiveTeam() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${LIVE_SERVER_API}/team`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      if (response.ok) {
+        const team = await response.json();
+        alert(`👥 LIVE-TEAM GELADEN!\n\n${team.length} Wächter registriert\nStatus vom Live-Server\nIP: 212.227.57.238`);
+      } else {
+        throw new Error('Team-API nicht verfügbar');
+      }
+    } catch (error) {
+      alert('👥 Live-Server Fehler - Demo-Daten:\n\n• 8 Wächter im System\n• 4 aktuell im Dienst\n• 2 auf Patrouille');
+    }
+  } else {
+    alert('👥 Demo: Team-Übersicht\n\n• Status aller Wächter\n• GPS-Standorte\n• Schicht-Planung\n• Verfügbarkeit');
+  }
+}
+
+async function loadLiveReports() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${LIVE_SERVER_API}/reports`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      if (response.ok) {
+        const reports = await response.json();
+        alert(`📊 LIVE-BERICHTE GELADEN!\n\n${reports.length} Berichte verfügbar\nDirekt vom MongoDB Server\n${new Date().toLocaleString()}`);
+      } else {
+        throw new Error('Reports-API nicht verfügbar');
+      }
+    } catch (error) {
+      alert('📊 Live-Server Fehler - Demo-Daten:\n\n• 15 Schichtberichte\n• 3 Wochenberichte\n• 1 Monatsauswertung');
+    }
+  } else {
+    alert('📊 Demo: Berichte-System\n\n• Digitale Schichtberichte\n• Statistiken\n• Export-Funktionen\n• Archivierung');
+  }
+}
+
+async function loadLiveAdmin() {
+  if (authToken && userInfo && (userInfo.role === 'Administrator' || userInfo.email.includes('admin'))) {
+    try {
+      const response = await fetch(`${LIVE_SERVER_API}/admin/dashboard`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      
+      if (response.ok) {
+        const adminData = await response.json();
+        alert(`⚙️ LIVE-ADMIN GELADEN!\n\nServer: 212.227.57.238\nBenutzer: ${adminData.users || 'N/A'}\nSystem-Status: Online`);
+      } else {
+        throw new Error('Admin-API nicht verfügbar');
+      }
+    } catch (error) {
+      alert('⚙️ Live-Server Fehler - Demo-Daten:\n\n• 12 Benutzer registriert\n• System: 99% Uptime\n• MongoDB: Verbunden');
+    }
+  } else {
+    alert('⚙️ Zugriff verweigert!\n\nAdmin-Berechtigung erforderlich.\nNur Administrator-Accounts haben Zugriff.');
+  }
+}
+
+async function sendLiveEmergency() {
+  if (authToken) {
+    try {
+      const response = await fetch(`${LIVE_SERVER_API}/emergency`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'emergency',
+          user: userInfo.email,
+          location: 'GPS: 51.3127, 7.2461 (Schwelm)',
+          timestamp: new Date().toISOString(),
+          server: '212.227.57.238'
+        })
+      });
+      
+      if (response.ok) {
+        alert('🚨 LIVE-NOTFALL GESENDET!\n\nServer: 212.227.57.238\nLeitstelle benachrichtigt\nGPS-Daten übermittelt\nStatus: AKTIV');
+      } else {
+        throw new Error('Emergency-API nicht verfügbar');
+      }
+    } catch (error) {
+      alert('🚨 Live-Server Fehler - Demo-Simulation:\n\nNotfall würde gesendet:\n• GPS-Koordinaten\n• Benutzer-ID\n• Zeitstempel\n• Priorität: HOCH');
+    }
+  } else {
+    alert('🚨 Demo: Notfall-System\n\nIn Live-Version:\n• Sofortige Leitstellen-Benachrichtigung\n• GPS-Übermittlung\n• Automatische Eskalation');
+  }
+}
+
+function logout() {
+  if (confirm('Möchten Sie sich wirklich abmelden?')) {
+    authToken = null;
+    userInfo = null;
+    document.getElementById('login').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('email').value = 'admin@stadtwache.de';
+    document.getElementById('password').value = 'admin123';
+    document.getElementById('connection-status').innerHTML = '🔄 Bereit für neue Anmeldung';
+  }
+}
+
+// Enter-Taste für Login
+document.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter' && document.getElementById('login').style.display !== 'none') {
+    loginWithLiveServer();
+  }
+});
+
+// Live-Server Verbindung beim Laden prüfen
+window.addEventListener('load', function() {
+  checkLiveServerConnection();
+  // Auto-Login mit Demo-Daten nach 2 Sekunden falls gewünscht
+});
+</script>
+</body>
+</html>

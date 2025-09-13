@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Stadtwache - Sicher</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:Arial;background:#1E3A8A;color:white;margin:0;padding:20px}
+.container{max-width:400px;margin:0 auto;background:rgba(255,255,255,0.1);padding:30px;border-radius:15px}
+h1{text-align:center;margin-bottom:20px}
+input{width:100%;padding:15px;margin:10px 0;border:none;border-radius:8px;font-size:16px}
+button{width:100%;padding:15px;background:#10B981;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin:10px 0}
+button:hover{background:#059669}
+button:disabled{background:#6B7280;cursor:not-allowed}
+.features{display:none}
+.feature{background:rgba(255,255,255,0.1);padding:20px;margin:10px 0;border-radius:8px;text-align:center;cursor:pointer}
+.feature:hover{background:rgba(255,255,255,0.2)}
+.status{padding:10px;border-radius:5px;margin:10px 0;font-size:14px}
+.online{background:rgba(16,185,129,0.3)}
+.offline{background:rgba(239,68,68,0.3)}
+.warning{background:rgba(245,158,11,0.3)}
+.server-info{background:rgba(255,255,255,0.05);padding:10px;border-radius:5px;margin:10px 0;font-size:12px;text-align:center}
+.loading{opacity:0.6}
+.security-notice{background:rgba(239,68,68,0.2);padding:15px;border-radius:8px;margin-top:15px;font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="server-info">
+🏛️ STADTWACHE SCHWELM<br>
+🌐 Live-Server: 212.227.57.238:8001<br>
+🔒 Sichere Authentifizierung
+</div>
+<div class="status" id="connection-status">🔄 Verbinde mit Live-Server...</div>
+<div id="login">
+<h1>🔐 ANMELDUNG</h1>
+<p>Sicherheitsbehörde Schwelm</p>
+<input type="email" id="email" placeholder="E-Mail-Adresse">
+<input type="password" id="password" placeholder="Passwort">
+<button id="login-btn" onclick="authenticateWithServer()">Mit Server anmelden</button>
+<div class="security-notice">
+🔐 Nur autorisierte Benutzer haben Zugriff<br>
+Kontaktieren Sie Ihren Administrator für Zugangsdaten
+</div>
+<div class="status warning" id="server-requirement">
+⚠️ Erfordert aktive Verbindung zum Live-Server
+</div>
+</div>
+<div id="app" class="features">
+<h1>🏛️ STADTWACHE DASHBOARD</h1>
+<div class="status online" id="user-info">👤 Angemeldet</div>
+<p id="welcome">Willkommen</p>
+<div class="feature" onclick="loadServerData('incidents')">📋 Vorfälle (Live)</div>
+<div class="feature" onclick="loadServerData('chat')">💬 Chat (Live)</div>
+<div class="feature" onclick="loadServerData('team')">👥 Team (Live)</div>
+<div class="feature" onclick="loadServerData('reports')">📊 Berichte (Live)</div>
+<div class="feature" onclick="loadServerData('admin')">⚙️ Admin (Live)</div>
+<div class="feature" onclick="sendEmergencyAlert()">🚨 Notfall</div>
+<button onclick="secureLogout()">Abmelden</button>
+<div class="status online" id="live-status">🔥 Live-Daten aktiv</div>
+</div>
+</div>
+<script>
+// NUR LIVE-SERVER KONFIGURATION
+const SERVER_HOST = '212.227.57.238';
+const SERVER_PORT = '8001';
+const SERVER_URL = `http://${SERVER_HOST}:${SERVER_PORT}`;
+const API_BASE = `${SERVER_URL}/api`;
+
+// Autorisierte Benutzer (versteckt - keine Anzeige)
+const AUTHORIZED_USERS = {
+  'admin@stadtwache.de': {
+    role: 'Administrator',
+    permissions: ['all']
+  },
+  'waechter@stadtwache.de': {
+    role: 'Wächter', 
+    permissions: ['incidents', 'chat', 'team', 'reports']
+  }
+};
+
+let authToken = null;
+let currentUser = null;
+let serverOnline = false;
+
+// Server-Verbindung prüfen
+async function checkServerConnection() {
+  const statusElement = document.getElementById('connection-status');
+  const loginButton = document.getElementById('login-btn');
+  
+  statusElement.innerHTML = '🔄 Teste Server-Verbindung...';
+  loginButton.disabled = true;
+  
+  try {
+    // Teste verschiedene Server-Endpoints
+    const testEndpoints = [
+      `${API_BASE}/health`,
+      `${API_BASE}/status`, 
+      `${SERVER_URL}/health`,
+      `${SERVER_URL}/docs`,
+      `${SERVER_URL}/`
+    ];
+    
+    for (const endpoint of testEndpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          signal: controller.signal,
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok || response.status === 404 || response.status === 405) {
+          serverOnline = true;
+          statusElement.innerHTML = `✅ Server online (${SERVER_HOST}:${SERVER_PORT})`;
+          statusElement.className = 'status online';
+          loginButton.disabled = false;
+          return true;
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.log(`Timeout für ${endpoint}`);
+        }
+        continue;
+      }
+    }
+    
+    throw new Error('Kein Server-Endpoint erreichbar');
+    
+  } catch (error) {
+    serverOnline = false;
+    statusElement.innerHTML = `❌ Server offline (${SERVER_HOST}:${SERVER_PORT})`;
+    statusElement.className = 'status offline';
+    loginButton.disabled = true;
+    
+    document.getElementById('server-requirement').innerHTML = 
+      '🚫 Anmeldung nicht möglich - Server nicht erreichbar';
+    
+    return false;
+  }
+}
+
+// Authentifizierung nur mit Live-Server
+async function authenticateWithServer() {
+  const email = document.getElementById('email').value.toLowerCase().trim();
+  const password = document.getElementById('password').value;
+  const loginButton = document.getElementById('login-btn');
+  const statusElement = document.getElementById('connection-status');
+  
+  // Eingabe-Validierung
+  if (!email || !password) {
+    alert('❌ Bitte E-Mail und Passwort eingeben');
+    return;
+  }
+  
+  // Benutzer-Autorisierung prüfen (ohne E-Mails preiszugeben)
+  if (!AUTHORIZED_USERS[email]) {
+    alert('❌ Nicht autorisiert!\n\nKontaktieren Sie Ihren Administrator für gültige Zugangsdaten.');
+    return;
+  }
+  
+  // Server-Status prüfen
+  if (!serverOnline) {
+    alert('❌ Server nicht erreichbar!\n\nBitte warten Sie, bis der Server online ist.');
+    return;
+  }
+  
+  // Login-Prozess starten
+  loginButton.disabled = true;
+  loginButton.textContent = 'Authentifiziere...';
+  statusElement.innerHTML = '🔐 Authentifizierung läuft...';
+  statusElement.className = 'status warning';
+  
+  try {
+    // Login-Endpoints versuchen
+    const loginEndpoints = [
+      `${API_BASE}/auth/login`,
+      `${API_BASE}/login`,
+      `${SERVER_URL}/auth/login`,
+      `${SERVER_URL}/login`,
+      `${API_BASE}/token`
+    ];
+    
+    for (const endpoint of loginEndpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+            username: email
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          authToken = data.access_token || data.token || data.authToken;
+          
+          if (authToken) {
+            currentUser = AUTHORIZED_USERS[email];
+            currentUser.email = email;
+            showSecureDashboard();
+            return;
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          throw new Error('Ungültige Anmeldedaten');
+        }
+      } catch (error) {
+        if (error.message === 'Ungültige Anmeldedaten') {
+          throw error;
+        }
+        continue;
+      }
+    }
+    
+    throw new Error('Server-Authentifizierung fehlgeschlagen');
+    
+  } catch (error) {
+    console.error('Authentifizierungsfehler:', error);
+    
+    statusElement.innerHTML = '❌ Authentifizierung fehlgeschlagen';
+    statusElement.className = 'status offline';
+    
+    if (error.message === 'Ungültige Anmeldedaten') {
+      alert('❌ UNGÜLTIGE ANMELDEDATEN!\n\nBitte überprüfen Sie Ihre Eingaben.\nKontaktieren Sie bei Problemen Ihren Administrator.');
+    } else {
+      alert('❌ SERVER-FEHLER!\n\nAuthentifizierung fehlgeschlagen.\nBitte versuchen Sie es später erneut.');
+    }
+  } finally {
+    loginButton.disabled = false;
+    loginButton.textContent = 'Mit Server anmelden';
+  }
+}
+
+// Sicheres Dashboard anzeigen
+function showSecureDashboard() {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  
+  document.getElementById('welcome').textContent = `Willkommen, ${currentUser.role}`;
+  document.getElementById('user-info').innerHTML = 
+    `👤 ${currentUser.role} - Authentifiziert`;
+  document.getElementById('live-status').innerHTML = 
+    `🔥 Live-Verbindung aktiv (${SERVER_HOST})`;
+  
+  // Admin-Funktionen nur für Administrator
+  if (currentUser.role !== 'Administrator') {
+    const adminFeature = document.querySelector('.feature:nth-child(5)');
+    if (adminFeature) {
+      adminFeature.style.opacity = '0.5';
+      adminFeature.onclick = () => alert('⚠️ Administrator-Berechtigung erforderlich');
+    }
+  }
+}
+
+// Live-Daten vom Server laden
+async function loadServerData(dataType) {
+  if (!authToken) {
+    alert('❌ Nicht authentifiziert!');
+    return;
+  }
+  
+  // Berechtigungen prüfen
+  if (!currentUser.permissions.includes('all') && !currentUser.permissions.includes(dataType)) {
+    alert('❌ Keine Berechtigung für diese Funktion!');
+    return;
+  }
+  
+  const endpoints = {
+    'incidents': [`${API_BASE}/incidents`, `${API_BASE}/vorfaelle`],
+    'chat': [`${API_BASE}/chat/messages`, `${API_BASE}/messages`],
+    'team': [`${API_BASE}/team`, `${API_BASE}/users`],
+    'reports': [`${API_BASE}/reports`, `${API_BASE}/berichte`],
+    'admin': [`${API_BASE}/admin/dashboard`, `${API_BASE}/admin`]
+  };
+  
+  try {
+    for (const endpoint of endpoints[dataType] || []) {
+      try {
+        const response = await fetch(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const count = Array.isArray(data) ? data.length : Object.keys(data).length;
+          
+          alert(`✅ ${getDataTypeLabel(dataType)} LIVE-DATEN GELADEN!\n\nServer: ${SERVER_HOST}\nDatensätze: ${count}\nEndpoint: ${endpoint}\nZeit: ${new Date().toLocaleTimeString()}`);
+          return;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    alert(`⚠️ ${getDataTypeLabel(dataType)}-Daten nicht verfügbar\n\nServer antwortet nicht auf diese Anfrage.\nMöglicherweise sind keine Daten vorhanden oder der Endpoint ist nicht implementiert.`);
+    
+  } catch (error) {
+    alert(`❌ Fehler beim Laden der ${getDataTypeLabel(dataType)}-Daten!\n\nServer-Verbindung unterbrochen oder Berechtigung abgelaufen.`);
+  }
+}
+
+function getDataTypeLabel(type) {
+  const labels = {
+    'incidents': '📋 VORFÄLLE',
+    'chat': '💬 CHAT',
+    'team': '👥 TEAM',
+    'reports': '📊 BERICHTE',
+    'admin': '⚙️ ADMIN'
+  };
+  return labels[type] || type.toUpperCase();
+}
+
+// Notfall-Alert senden
+async function sendEmergencyAlert() {
+  if (!authToken) {
+    alert('❌ Nicht authentifiziert!');
+    return;
+  }
+  
+  if (!confirm('🚨 NOTFALL SENDEN?\n\nDies wird eine echte Notfall-Meldung an den Server senden!\n\nFortfahren?')) {
+    return;
+  }
+  
+  try {
+    const emergencyData = {
+      type: 'emergency',
+      user: currentUser.email,
+      role: currentUser.role,
+      timestamp: new Date().toISOString(),
+      location: 'GPS: Schwelm, Deutschland',
+      server: SERVER_HOST
+    };
+    
+    const endpoints = [
+      `${API_BASE}/emergency`,
+      `${API_BASE}/notfall`,
+      `${SERVER_URL}/emergency`
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(emergencyData)
+        });
+        
+        if (response.ok) {
+          alert(`🚨 NOTFALL GESENDET!\n\nServer: ${SERVER_HOST}\nBenutzer: ${currentUser.role}\nStatus: AKTIV\nZeit: ${new Date().toLocaleString()}\n\nLeitstelle wurde benachrichtigt!`);
+          return;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    alert('⚠️ Notfall-Meldung konnte nicht gesendet werden.\nServer antwortet nicht auf Notfall-Endpoint.');
+    
+  } catch (error) {
+    alert('❌ Fehler beim Senden der Notfall-Meldung!');
+  }
+}
+
+// Sichere Abmeldung
+function secureLogout() {
+  if (confirm('Möchten Sie sich wirklich abmelden?')) {
+    authToken = null;
+    currentUser = null;
+    
+    document.getElementById('login').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('email').value = '';
+    document.getElementById('password').value = '';
+    
+    document.getElementById('connection-status').innerHTML = '🔓 Abgemeldet - Bereit für neue Anmeldung';
+    document.getElementById('connection-status').className = 'status warning';
+  }
+}
+
+// Enter-Taste für Login
+document.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter' && document.getElementById('login').style.display !== 'none') {
+    authenticateWithServer();
+  }
+});
+
+// Server-Verbindung beim Laden prüfen
+window.addEventListener('load', function() {
+  checkServerConnection();
+  
+  // Periodische Server-Überwachung
+  setInterval(checkServerConnection, 30000); // Alle 30 Sekunden
+});
+</script>
+</body>
+</html>

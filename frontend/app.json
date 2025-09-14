@@ -1,13 +1,13 @@
 {
   "expo": {
     "name": "Stadtwache",
-    "slug": "stadtwache",
+    "slug": "stadtwache-schwelm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "stadtwache",
     "userInterfaceStyle": "automatic",
-    "description": "Moderne Stadtwache-App für Sicherheitsbehörden und Bürgerdienste",
+    "description": "Sicherheitsbehörde Schwelm - Professional Security Solution",
     "primaryColor": "#1E3A8A",
     "splash": {
       "image": "./assets/splash.png",
@@ -19,11 +19,11 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stadtwache.app",
+      "bundleIdentifier": "com.stadtwache.schwelm",
       "buildNumber": "1"
     },
     "android": {
-      "package": "com.stadtwache.app",
+      "package": "com.stadtwache.schwelm",
       "versionCode": 1,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
@@ -64,8 +64,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "stadtwache-app-2025"
-      }
+        "projectId": "stadtwache-schwelm-2024"
+      },
+      "serverUrl": "http://212.227.57.238:8001"
     }
   }
 }
